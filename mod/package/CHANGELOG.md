@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Screenshot in the README; link to the source code on GitHub.
+
 ## 0.2.0
 
 - Search box in the window header: finds any discovered step on every page (accents and case ignored,

@@ -1,7 +1,7 @@
 {
   "name": "UnlockTree",
-  "version_number": "0.2.0",
-  "website_url": "",
+  "version_number": "0.2.1",
+  "website_url": "https://github.com/OkoThings/UnlockTree",
   "description": "Minecraft-style advancement tree for Valheim, built from the game's real requirements: recipes, stations, tool tiers, drops, bosses and biomes. Undiscovered steps stay hidden as \"?\".",
   "dependencies": [
     "denikson-BepInExPack_Valheim-5.4.2360",

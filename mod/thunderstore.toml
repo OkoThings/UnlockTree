@@ -4,9 +4,9 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "OkoThings"
 name = "UnlockTree"
-versionNumber = "0.2.0"
+versionNumber = "0.2.1"
 description = "Minecraft-style advancement tree for Valheim, built from the game's real requirements: recipes, stations, tool tiers, drops, bosses and biomes. Undiscovered steps stay hidden as \"?\"."
-websiteUrl = ""
+websiteUrl = "https://github.com/OkoThings/UnlockTree"
 containsNsfwContent = false
 
 [package.dependencies]

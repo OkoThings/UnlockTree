@@ -4,6 +4,8 @@ A Minecraft-style advancement tree for Valheim. Every link is a requirement the 
 recipe ingredients, crafting station levels, tool tiers, creature drops, boss offerings, locked doors
 and the biome things are found in. Nothing is invented.
 
+![Unlock Tree in game](https://raw.githubusercontent.com/OkoThings/UnlockTree/main/docs/screenshot.png)
+
 ## Features
 
 - **Five pages**: Exploration, Crafting, Building, Combat, Food & farming. A step can be on several
@@ -35,6 +37,8 @@ and the biome things are found in. Nothing is invented.
 | `InventoryButtonOffset` | 0, 0 | Move the inventory button if it overlaps another mod's |
 
 Client-side only: nothing to install on the server.
+
+Source code, bug reports: https://github.com/OkoThings/UnlockTree
 
 ---
 
