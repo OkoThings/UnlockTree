@@ -1,0 +1,627 @@
+<title>OkoSaga</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Grenze:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap">
+<style>
+/* Layout: header, biome tabs, a pannable canvas holding one requirement tree per biome; requirement panel beneath. Single dark look on purpose (in-game UI). */
+:root {
+  color-scheme: dark;
+  --sky: #10171e;
+  --sky-2: #172230;
+  --panel: #1b2835;
+  --panel-edge: #2f4152;
+  --ink: #e8dfcc;
+  --ink-dim: #9aa6b0;
+  --ink-faint: #5f6d79;
+  --gold: #e3a94f;
+  --gold-soft: rgba(227, 169, 79, .20);
+  --steel: #8fb0c8;
+  --locked: #34424f;
+  --boss: #c8553d;
+  --display: "Grenze", "Palatino Linotype", Georgia, serif;
+  --body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--sky); color: var(--ink); font: 16px/1.45 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 18px 28px;
+}
+.wrap { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1 { font: 700 clamp(2rem, 5vw, 2.7rem)/1 var(--display); margin: 0; }
+h1 span { color: var(--gold); }
+.who { color: var(--ink-dim); font-size: .95rem; margin-top: 4px; }
+.who b { color: var(--ink); font-weight: 500; }
+.right { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; }
+.overall { min-width: 200px; }
+.overall .num { font: 700 1.45rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.overall .num small { font: 500 .85rem var(--body); color: var(--ink-dim); margin-left: 6px; }
+.bar { height: 6px; background: var(--locked); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--gold); }
+.ctl { display: flex; gap: 8px; align-items: center; }
+.ctl input {
+  font: 500 .95rem var(--body); color: var(--ink); background: var(--sky-2); border: 1px solid var(--panel-edge);
+  border-radius: 6px; padding: 7px 10px; width: 190px;
+}
+.ctl button, .tools button {
+  font: 600 .9rem var(--body); color: var(--ink); background: var(--sky-2); border: 1px solid var(--panel-edge);
+  border-radius: 6px; padding: 7px 10px; cursor: pointer;
+}
+.results { position: absolute; z-index: 5; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 8px;
+  margin-top: 4px; max-height: 300px; overflow: auto; width: 280px; }
+.results button { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; background: none; border: none;
+  color: var(--ink); padding: 6px 10px; cursor: pointer; font: 500 .9rem var(--body); }
+.results button:hover, .results button:focus-visible { background: var(--sky-2); }
+.results small { color: var(--ink-faint); margin-left: auto; }
+.results img { width: 22px; height: 22px; }
+
+.filters { display: flex; flex-direction: column; gap: 7px; }
+.frow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.frow > b { font: 600 .72rem var(--body); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-faint); width: 84px; flex: none; }
+@media (max-width: 760px) { .frow > b { width: 100%; } }
+.fchip { font: 600 .86rem/1 var(--body); color: var(--ink-dim); background: var(--sky-2); border: 1px solid var(--panel-edge);
+  border-radius: 999px; padding: 6px 11px; cursor: pointer; display: inline-flex; gap: 6px; align-items: baseline; }
+.fchip small { font-weight: 500; font-size: .74rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.fchip[aria-pressed="true"] { color: var(--ink); border-color: var(--gold); background: #2a2a22; }
+.fchip[aria-pressed="true"] small { color: var(--gold); }
+.fchip.all { color: var(--ink-faint); border-style: dashed; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.stage {
+  position: relative; height: min(68vh, 720px); min-height: 380px;
+  border: 1px solid var(--panel-edge); border-radius: 10px; overflow: hidden;
+  background: radial-gradient(ellipse 70% 60% at 15% 0%, rgba(143,176,200,.08), transparent 70%), var(--panel);
+  touch-action: none; cursor: grab; user-select: none;
+}
+.stage.dragging { cursor: grabbing; }
+.world { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+svg.edges { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+svg.edges path { fill: none; stroke: var(--locked); stroke-width: 2.5; }
+svg.edges path.on { stroke: var(--gold); stroke-opacity: .7; }
+svg.edges path.reach { stroke: var(--steel); stroke-opacity: .55; }
+svg.edges path.loose { stroke-dasharray: 5 5; }
+svg.edges rect.block { fill: rgba(16, 23, 30, .35); stroke: var(--locked); stroke-width: 1; }
+
+.node {
+  position: absolute; width: 92px; margin-left: -46px; margin-top: -24px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  background: none; border: none; padding: 0; cursor: pointer; color: inherit; font: inherit;
+}
+.frame {
+  width: 48px; height: 48px; display: grid; place-items: center;
+  background: var(--sky-2); border: 2.5px solid var(--locked); border-radius: 6px; position: relative;
+}
+.frame img { width: 36px; height: 36px; filter: grayscale(1) brightness(.5); }
+.frame .gl { font: 700 1.1rem var(--display); color: var(--ink-faint); }
+.node.ms .frame { border-radius: 50%; }
+.node.boss .frame { transform: rotate(45deg); border-radius: 5px; }
+.node.boss .frame > * { transform: rotate(-45deg); }
+.node.mob .frame { border-radius: 14px; }
+.node.reach .frame { border-color: var(--steel); }
+.node.reach .frame img { filter: grayscale(.35) brightness(.85); }
+.node.reach .gl { color: var(--steel); }
+.node.done .frame { border-color: var(--gold); background: #2a2a22; box-shadow: 0 0 0 3px var(--gold-soft); }
+.node.done .frame img { filter: none; }
+.node.done .gl { color: var(--gold); }
+.node.boss:not(.done) .frame { border-color: color-mix(in srgb, var(--boss) 60%, var(--locked)); }
+.node.ctx { opacity: .4; }
+.node.done.im .frame { border-style: dashed; background: var(--sky-2); box-shadow: none; }
+.node.ctx .frame { border-style: dashed; }
+.node.sel .frame { outline: 2px solid var(--ink); outline-offset: 3px; }
+.node:hover .frame { filter: brightness(1.15); }
+.label { font-size: .74rem; line-height: 1.12; text-align: center; color: var(--ink-faint); max-width: 90px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.node.reach .label { color: var(--ink-dim); }
+.node.done .label { color: var(--ink); }
+.node.big .label { font: 700 .95rem/1.05 var(--display); }
+.node.boss .label { margin-top: 8px; }
+
+.tools { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; }
+.tools button { width: 34px; height: 34px; padding: 0; }
+.hint { position: absolute; left: 12px; bottom: 12px; font-size: .78rem; color: var(--ink-faint); pointer-events: none; }
+
+.below { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 760px) { .below { grid-template-columns: minmax(0, 1fr); } .hint { display: none; } .ctl input { width: 140px; } }
+.card { background: var(--sky-2); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h2 { font: 600 .76rem var(--body); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-faint); margin: 0 0 10px; }
+.detail { display: flex; gap: 14px; align-items: flex-start; }
+.detail > div:last-child { flex: 1; }
+.detail .big { width: 60px; height: 60px; display: grid; place-items: center; flex: none;
+  border: 2.5px solid var(--locked); border-radius: 6px; background: var(--panel); }
+.detail .big img { width: 46px; height: 46px; }
+.detail.done .big { border-color: var(--gold); }
+.detail h3 { font: 700 1.45rem/1.1 var(--display); margin: 0; text-wrap: balance; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pill { font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  padding: 2px 8px; border-radius: 999px; border: 1px solid var(--locked); color: var(--ink-faint); }
+.pill.done { color: var(--gold); border-color: var(--gold); }
+.pill.reach { color: var(--steel); border-color: var(--steel); }
+.reqs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.req { display: inline-flex; gap: 6px; align-items: center; font: 500 .88rem var(--body); color: var(--ink-dim);
+  background: var(--panel); border: 1px solid var(--locked); border-radius: 6px; padding: 3px 9px 3px 4px; cursor: pointer; }
+.req.ok { color: var(--ink); border-color: color-mix(in srgb, var(--gold) 55%, var(--locked)); }
+.req img { width: 22px; height: 22px; }
+.req b { font-variant-numeric: tabular-nums; color: var(--ink-faint); font-weight: 500; }
+.note { font-size: .82rem; color: var(--ink-faint); margin-top: 8px; }
+.desc { font-style: italic; color: var(--ink-dim); margin: 8px 0 0; max-width: 62ch; }
+.ways { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ways h4 { font: 600 .74rem var(--body); text-transform: uppercase; letter-spacing: .12em; color: var(--ink-faint); margin: 4px 0 0; }
+.way { border: 1px solid var(--locked); border-radius: 8px; padding: 8px 10px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.way.best { border-color: color-mix(in srgb, var(--steel) 60%, var(--locked)); }
+.way p { margin: 0; font-size: .92rem; color: var(--ink); }
+.way p .also { color: var(--ink-faint); font-size: .84rem; }
+.way .tag { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--steel); margin-left: 6px; }
+.way .reqs { margin-top: 6px; }
+.more { align-self: flex-start; font: 600 .85rem var(--body); color: var(--steel); background: none; border: 1px solid var(--locked);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; gap: 6px; align-items: center; font: 500 .88rem var(--body); color: var(--ink);
+  background: var(--panel); border: 1px solid var(--steel); border-radius: 999px; padding: 3px 11px 3px 5px; cursor: pointer; }
+.chip img { width: 22px; height: 22px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .8rem; color: var(--ink-dim); margin-top: 12px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--gold); margin-right: 5px; vertical-align: -1px; }
+.legend .c i { border-radius: 50%; } .legend .m i { border-radius: 4px; }
+.legend .b i { transform: rotate(45deg); border-color: var(--boss); }
+.legend .s i { border-color: var(--steel); } .legend .l i { border-color: var(--locked); }
+.legend .g i { border-style: dashed; border-color: var(--ink-faint); }
+.foot { font-size: .8rem; color: var(--ink-faint); }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Oko<span>Saga</span></h1>
+      <div class="who"><span id="t-of"></span> <b id="who"></b> · <span id="t-saved"></span> <span id="saved"></span></div>
+    </div>
+    <div class="right">
+      <div class="ctl" style="position:relative">
+        <input id="q" type="search" autocomplete="off" aria-label="Search">
+        <div class="results" id="results" hidden></div>
+        <button type="button" id="lang" aria-label="Language">FR</button>
+      </div>
+      <div class="overall">
+        <div class="num" id="overall"></div>
+        <div class="bar"><i id="overallbar"></i></div>
+      </div>
+    </div>
+  </header>
+  <div class="filters" id="filters"></div>
+  <div class="stage" id="stage">
+    <div class="world" id="world"><svg class="edges" id="edges"></svg></div>
+    <div class="hint" id="hint"></div>
+    <div class="tools">
+      <button type="button" id="zout" aria-label="Zoom out">−</button>
+      <button type="button" id="zin" aria-label="Zoom in">+</button>
+      <button type="button" id="zfit" aria-label="Fit">⤢</button>
+    </div>
+  </div>
+  <div class="below">
+    <section class="card" aria-live="polite">
+      <h2 id="t-sel"></h2>
+      <div id="detail"></div>
+    </section>
+    <section class="card">
+      <h2 id="t-next"></h2>
+      <div class="chips" id="next"></div>
+      <div class="legend" id="legend"></div>
+    </section>
+  </div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const DATA = /*DATA*/null;
+const T = {
+  en: { of: 'Advancements of', saved: 'save from', sel: 'Selected', next: 'Within reach', search: 'Find an item, creature…',
+        done: 'Done', reach: 'Available', locked: 'Locked', of2: 'of', adv: 'advancements', needs: 'Needs',
+        alt: n => `Can also be obtained ${n} other way${n > 1 ? 's' : ''}; this is the easiest.`,
+        loose: 'The game files don\'t say where this is found; shown where it is first needed.',
+        root: 'Start of this biome.', hint: 'Drag to pan · scroll to zoom',
+        kinds: { item: 'Item', piece: 'Building piece', station: 'Crafting station', level: 'Station upgrade', tool: 'Tool tier',
+                 mob: 'Creature', boss: 'Boss', biome: 'Biome', gate: 'Gate' },
+        legend: ['Item / piece', 'Milestone', 'Creature', 'Boss', 'Next up', 'Locked', 'Shown as a requirement only'],
+        nothing: 'Nothing within reach matches these filters.',
+        f: { biome: 'Biome', cat: 'Type', status: 'Status', all: 'All', any: 'Any' },
+        cats: { mat: 'Materials', food: 'Food', weapon: 'Weapons', ammo: 'Ammo', armour: 'Armour', tool: 'Tools', build: 'Building',
+                trophy: 'Trophies', mob: 'Creatures', boss: 'Bosses', milestone: 'Milestones' },
+        solo: 'Click to show only this; click others to add them',
+        ways: n => n === 1 ? 'How to get it' : `${n} ways to get it`, used: 'used in the tree', showall: n => `Show all ${n} ways`,
+        hidden: n => `${n} more not listed.`, nothingNeeded: 'Nothing needed.',
+        w: {
+          craft: h => h.st ? `Craft at ${N(h.st)}${h.level > 1 ? ` (level ${h.level})` : ''}${h.amount > 1 ? `, makes ${h.amount}` : ''}` : `Craft by hand${h.amount > 1 ? `, makes ${h.amount}` : ''}`,
+          build: h => `Build with the ${N(h.tool)}${h.near ? ` near a ${N(h.near)}` : ''}`,
+          drop: (h, x) => `Dropped by ${x.mob}${h.chance < 100 ? ` (${h.chance}% chance` : ' (always'}${h.hi > 1 ? `, ${h.lo}–${h.hi}` : ''})`,
+          mine: h => `Mine ${S(h.src)}`, chop: h => `Chop ${S(h.src)}`, break: h => `Break ${S(h.src)}`,
+          pick: h => `Pick up ${S(h.src)}`, loot: h => `Loot from ${S(h.src)}`,
+          spawn: h => h.src ? `Spawns from ${S(h.src)}` : 'Lives there', roam: () => 'Roams the biome',
+          summon: h => `Summon by offering ${h.n}× ${N(h.item)} at its altar`,
+          offer: h => `Open by offering ${h.n}× ${N(h.item)}`,
+          story: h => `Next biome after defeating ${N(h.boss)} (the game's boss order)`, start: () => 'Where every journey starts',
+          tool: h => `Use a tool of tier ${h.tier}`, convert: h => `Process ${N(h.src)} in a ${N(h.st)}`,
+          produce: h => `Collected from a ${N(h.st)}`, grow: h => `Grows from a planted ${N(h.st)}`, lure: h => `Lured to a ${N(h.st)}`,
+          fish: h => `Fish with a rod and ${N(h.bait)}`,
+          buy: h => `Buy from ${S(h.src)} for ${h.price} coins`,
+          level: h => `Previous level plus one more upgrade. Upgrades: ${h.exts.map(N).join(', ')}`,
+        },
+        inb: b => ` in ${b}`, at: l => ` at ${l}`, after: b => `, after ${b} is defeated`, lockedBy: k => `, behind a door locked with ${k}`,
+        also: 'also',
+        unlocks: n => `Unlocks ${n}`, unlocksNone: 'Nothing else needs this.', showmore: n => `Show all ${n}`,
+        implied: 'Done in the world', impliedNote: 'Your character never had it, but something you have needs it, so someone in your group made it happen.',
+        foot: 'Every link is a requirement read from the game files: recipe ingredients, crafting station level, tool tier, boss offering, locked door key, or the biome an item is found in. Biomes follow the game\'s boss order. Creatures count as killed when you have picked up their loot.' },
+  fr: { of: 'Progression de', saved: 'sauvegarde du', sel: 'Sélection', next: 'À portée', search: 'Chercher un objet, une créature…',
+        done: 'Fait', reach: 'Disponible', locked: 'Verrouillé', of2: 'sur', adv: 'progrès', needs: 'Nécessite',
+        alt: n => `Peut aussi s'obtenir de ${n} autre${n > 1 ? 's' : ''} façon${n > 1 ? 's' : ''} ; voici la plus simple.`,
+        loose: 'Les fichiers du jeu ne disent pas où le trouver ; affiché là où il sert en premier.',
+        root: 'Début de ce biome.', hint: 'Glisser pour déplacer · molette pour zoomer',
+        kinds: { item: 'Objet', piece: 'Construction', station: 'Atelier', level: 'Amélioration d\'atelier', tool: 'Niveau d\'outil',
+                 mob: 'Créature', boss: 'Boss', biome: 'Biome', gate: 'Porte' },
+        legend: ['Objet / construction', 'Étape', 'Créature', 'Boss', 'Prochain', 'Verrouillé', 'Affiché comme prérequis seulement'],
+        nothing: 'Rien à portée ne correspond à ces filtres.',
+        f: { biome: 'Biome', cat: 'Type', status: 'État', all: 'Tous', any: 'Tous' },
+        cats: { mat: 'Matériaux', food: 'Nourriture', weapon: 'Armes', ammo: 'Munitions', armour: 'Armures', tool: 'Outils', build: 'Construction',
+                trophy: 'Trophées', mob: 'Créatures', boss: 'Boss', milestone: 'Étapes' },
+        solo: 'Cliquer pour n\'afficher que celui-ci ; cliquer les autres pour les ajouter',
+        ways: n => n === 1 ? 'Comment l\'obtenir' : `${n} façons de l'obtenir`, used: 'utilisé dans l\'arbre', showall: n => `Voir les ${n} façons`,
+        hidden: n => `${n} de plus non listées.`, nothingNeeded: 'Rien de requis.',
+        w: {
+          craft: h => h.st ? `Fabriquer à : ${N(h.st)}${h.level > 1 ? ` (niveau ${h.level})` : ''}${h.amount > 1 ? `, donne ${h.amount}` : ''}` : `Fabriquer à la main${h.amount > 1 ? `, donne ${h.amount}` : ''}`,
+          build: h => `Construire avec : ${N(h.tool)}${h.near ? `, près de : ${N(h.near)}` : ''}`,
+          drop: (h, x) => `Lâché par ${x.mob}${h.chance < 100 ? ` (${h.chance} % de chance` : ' (toujours'}${h.hi > 1 ? `, ${h.lo}–${h.hi}` : ''})`,
+          mine: h => `Miner : ${S(h.src)}`, chop: h => `Abattre : ${S(h.src)}`, break: h => `Casser : ${S(h.src)}`,
+          pick: h => `Ramasser : ${S(h.src)}`, loot: h => `Butin de : ${S(h.src)}`,
+          spawn: h => h.src ? `Apparaît depuis : ${S(h.src)}` : 'Vit sur place', roam: () => 'Rôde dans le biome',
+          summon: h => `Invoquer en offrant ${h.n}× ${N(h.item)} à son autel`,
+          offer: h => `Ouvrir en offrant ${h.n}× ${N(h.item)}`,
+          story: h => `Biome suivant après avoir vaincu ${N(h.boss)} (ordre des boss du jeu)`, start: () => 'Là où tout commence',
+          tool: h => `Outil de niveau ${h.tier}`, convert: h => `Transformer ${N(h.src)} dans : ${N(h.st)}`,
+          produce: h => `Récolté sur : ${N(h.st)}`, grow: h => `Pousse depuis : ${N(h.st)} planté`, lure: h => `Attiré par : ${N(h.st)}`,
+          fish: h => `Pêcher avec une canne et ${N(h.bait)}`,
+          buy: h => `Acheter à ${S(h.src)} pour ${h.price} pièces`,
+          level: h => `Niveau précédent plus une amélioration. Améliorations : ${h.exts.map(N).join(', ')}`,
+        },
+        inb: b => `, ${b}`, at: l => ` (${l})`, after: b => `, après avoir vaincu ${b}`, lockedBy: k => `, derrière une porte fermée par ${k}`,
+        also: 'aussi',
+        unlocks: n => `Débloque ${n}`, unlocksNone: 'Rien d\'autre n\'en a besoin.', showmore: n => `Voir les ${n}`,
+        implied: 'Fait dans le monde', impliedNote: 'Ton personnage ne l\'a jamais eu, mais quelque chose que tu as en dépend : quelqu\'un de ton groupe l\'a fait.',
+        foot: 'Chaque lien est une condition lue dans les fichiers du jeu : ingrédients, niveau d\'atelier, niveau d\'outil, offrande de boss, clé de porte, ou biome où l\'objet se trouve. Les biomes suivent l\'ordre des boss. Une créature compte comme tuée quand tu as ramassé son butin.' },
+};
+let lang = 'en';
+try { lang = localStorage.getItem('okosaga-lang') || (navigator.language || '').startsWith('fr') && 'fr' || 'en'; } catch (e) {}
+const t = () => T[lang];
+const nm = id => { const n = DATA.names[id]; return n ? (lang === 'fr' ? n[1] : n[0]) : id; };
+const N = id => id ? nm(id) : '';
+const S = pair => Array.isArray(pair) ? (lang === 'fr' ? pair[1] : pair[0]) : (pair || '');
+const MS = new Set(['biome', 'station', 'level', 'tool', 'gate']);
+const COL = 128, CW = 96, CH = 88, PAD = 60, GRIDMAX = 6;
+const $ = id => document.getElementById(id);
+const stage = $('stage'), world = $('world'), edges = $('edges');
+let view = { x: 0, y: 0, k: 1 }, selected = null, laid = null;
+const N0 = DATA.nodes, PARENT = {}, KIDS = {};
+Object.keys(N0).forEach(k => KIDS[k] = []);
+DATA.links.forEach(([a, b, kind]) => { if (N0[a] && N0[b]) { PARENT[b] = a; KIDS[a].push({ id: b, kind }); } });
+const ST = {};  // done / reach (every requirement on the tree path above is done) / locked
+Object.values(N0).forEach(n => { const p = PARENT[n.id]; ST[n.id] = n.d ? 'done' : (!p || N0[p].d) ? 'reach' : 'locked'; });
+const CATS = ['mat', 'food', 'weapon', 'ammo', 'armour', 'tool', 'build', 'trophy', 'mob', 'boss', 'milestone']
+  .filter(c => Object.values(N0).some(n => n.c === c));
+const ERAS = DATA.eras.map((_, i) => i);
+const STATUS = ['all', 'reach', 'done', 'locked'];
+let F = { era: new Set(ERAS), cat: new Set(CATS), status: 'all' };
+try { const s = JSON.parse(localStorage.getItem('okosaga-filters') || 'null');
+  if (s) F = { era: new Set(s.era.filter(e => ERAS.includes(e))), cat: new Set(s.cat.filter(c => CATS.includes(c))), status: STATUS.includes(s.status) ? s.status : 'all' };
+  if (!F.era.size) F.era = new Set(ERAS); if (!F.cat.size) F.cat = new Set(CATS);
+} catch (e) {}
+function saveF() { try { localStorage.setItem('okosaga-filters', JSON.stringify({ era: [...F.era], cat: [...F.cat], status: F.status })); } catch (e) {} }
+const matches = n => F.era.has(n.era) && F.cat.has(n.c) && (F.status === 'all' || ST[n.id] === F.status);
+
+function iconHTML(ic, kind, name) {
+  if (ic && DATA.icons[ic]) return `<img alt="" src="${DATA.icons[ic]}">`;
+  const g = { biome: '◈', tool: '⚒', gate: '⛩', mob: '☗', boss: '☠', level: '▲', station: '⌂' }[kind] || (name || '?')[0];
+  return `<span class="gl">${g}</span>`;
+}
+function state(n, kids, parentDone) { return n.d ? 'done' : parentDone ? 'reach' : 'locked'; }
+
+function build() {
+  // filtered nodes, plus every ancestor on their tree path (dimmed) so each one stays connected to the start
+  const show = new Set(), ctx = new Set();
+  Object.values(N0).forEach(n => {
+    if (!matches(n)) return;
+    show.add(n.id);
+    for (let p = PARENT[n.id]; p && !show.has(p); p = PARENT[p]) { show.add(p); ctx.add(p); }
+  });
+  ctx.forEach(k => { if (show.has(k) && matches(N0[k])) ctx.delete(k); });
+  const N = {}; show.forEach(k => N[k] = N0[k]);
+  const kids = {}; show.forEach(k => kids[k] = KIDS[k].filter(c => show.has(c.id)));
+  const roots = [...show].filter(k => !PARENT[k] || !show.has(PARENT[k])).sort((a, b) => N[a].dp - N[b].dp || N[b].era - N[a].era);
+  Object.values(kids).forEach(list => list.sort((x, y) => {
+    const ax = kids[x.id].length > 0, ay = kids[y.id].length > 0;
+    if (ax !== ay) return ax - ay;                       // leaves first (they pack into a grid)
+    return N[x.id].era - N[y.id].era || N[x.id].dp - N[y.id].dp || nm(x.id).localeCompare(nm(y.id));
+  }));
+  const pos = {}, blocks = [], paths = [];
+  function place(k, x, y) {
+    pos[k] = { x, y, st: ST[k] };
+    const leaves = kids[k].filter(c => !kids[c.id].length), inner = kids[k].filter(c => kids[c.id].length);
+    let cy = y, firstY = null;
+    if (leaves.length) {
+      const cols = Math.min(GRIDMAX, Math.max(1, Math.ceil(Math.sqrt(leaves.length * 1.6))));
+      const rows = Math.ceil(leaves.length / cols);
+      leaves.forEach((c, i) => { pos[c.id] = { x: x + COL + (i % cols) * CW, y: cy + Math.floor(i / cols) * CH, st: ST[c.id] }; });
+      blocks.push({ x: x + COL - CW / 2, y: cy - 30, w: cols * CW, h: rows * CH, from: k,
+                    kind: leaves.some(c => c.kind === 'loose') ? 'loose' : 'req', on: leaves.every(c => N[c.id].d), reach: N[k].d });
+      firstY = cy; cy += rows * CH + 14;
+    }
+    inner.forEach(c => {
+      const h = place(c.id, x + COL, cy);
+      if (firstY === null) firstY = pos[c.id].y;
+      paths.push({ a: k, b: c.id, kind: c.kind });
+      cy = h;
+    });
+    if (!kids[k].length) return y + CH;
+    pos[k].y = firstY === null ? y : Math.min(firstY, y);
+    return Math.max(cy, y + CH);
+  }
+  let y0 = PAD;
+  roots.forEach(r => { y0 = place(r, PAD + 30, y0) + 20; });
+  return { N, kids, pos, blocks, paths, roots, ctx };
+}
+
+function render() {
+  const L = build(); laid = L;
+  world.querySelectorAll('.node').forEach(e => e.remove());
+  let maxX = 0, maxY = 0;
+  Object.values(L.pos).forEach(p => { maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+  L.w = maxX + PAD + 60; L.h = maxY + PAD + 40;
+  world.style.width = L.w + 'px'; world.style.height = L.h + 'px';
+  edges.setAttribute('width', L.w); edges.setAttribute('height', L.h);
+  let svg = '';
+  L.blocks.forEach(b => {
+    const p = L.pos[b.from];
+    svg += `<rect class="block" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="8"/>`;
+    const cls = (b.on ? 'on' : b.reach ? 'reach' : '') + (b.kind === 'loose' ? ' loose' : '');
+    svg += `<path class="${cls}" d="M${p.x + 26} ${p.y} H${b.x - 8} V${b.y + 26} H${b.x}"/>`;
+  });
+  L.paths.forEach(({ a, b, kind }) => {
+    const p = L.pos[a], q = L.pos[b], mx = p.x + 64;
+    const cls = (L.N[b].d ? 'on' : L.N[a].d ? 'reach' : '') + (kind === 'loose' ? ' loose' : '');
+    svg += `<path class="${cls}" d="M${p.x + 26} ${p.y} H${mx} V${q.y} H${q.x - 26}"/>`;
+  });
+  edges.innerHTML = svg;
+  Object.entries(L.pos).forEach(([k, p]) => {
+    const n = L.N[k];
+    const b = document.createElement('button');
+    b.type = 'button';
+    const shape = n.k === 'boss' ? 'boss' : n.k === 'mob' ? 'mob' : MS.has(n.k) ? 'ms' : 'sq';
+    b.className = `node ${shape} ${p.st}${n.im ? ' im' : ''}${L.ctx.has(k) ? ' ctx' : ''}${n.k === 'biome' || n.k === 'boss' ? ' big' : ''}`;
+    b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+    b.innerHTML = `<div class="frame">${iconHTML(n.ic, n.k, nm(n.id))}</div><div class="label"></div>`;
+    b.querySelector('.label').textContent = nm(n.id);
+    b.setAttribute('aria-label', `${nm(n.id)}: ${t()[p.st]}`);
+    b.addEventListener('click', () => { if (!moved) select(k); });
+    n.el = b; world.appendChild(b);
+  });
+  const next = Object.entries(L.pos).filter(([k, p]) => p.st === 'reach' && !L.ctx.has(k))
+    .sort((a, b) => L.N[a[0]].dp - L.N[b[0]].dp);
+  $('next').innerHTML = '';
+  if (!next.length) $('next').textContent = t().nothing;
+  next.slice(0, 14).forEach(([k]) => {
+    const n = L.N[k], c = document.createElement('button');
+    c.type = 'button'; c.className = 'chip';
+    c.innerHTML = `${n.ic && DATA.icons[n.ic] ? `<img alt="" src="${DATA.icons[n.ic]}">` : ''}<span></span>`;
+    c.lastChild.textContent = nm(n.id);
+    c.onclick = () => { select(k); focusNode(k); };
+    $('next').appendChild(c);
+  });
+  const first = next[0] ? next[0][0] : L.roots[0];
+  const keep = selected && L.pos[selected];
+  if (!first) { $('detail').innerHTML = ''; home(); return; }
+  select(keep ? selected : first);
+  if (keep) focusNode(selected); else home();
+}
+
+function chip(r) {
+  const meta = DATA.names[r.id] || [r.id, r.id, null, false];
+  const e = document.createElement('button'); e.type = 'button';
+  e.className = 'req' + (meta[3] ? ' ok' : '');
+  e.innerHTML = `${meta[2] && DATA.icons[meta[2]] ? `<img alt="" src="${DATA.icons[meta[2]]}">` : '<span style="width:4px"></span>'}<span></span>${r.n ? `<b>×${r.n}</b>` : ''}${meta[3] ? ' ✓' : ''}`;
+  e.children[1].textContent = nm(r.id);
+  e.onclick = () => jump(r.id);
+  return e;
+}
+function sentence(w) {
+  const h = w.h[0] || {}, f = t().w[h.t];
+  const ids = w.r.map(r => r.id);
+  const biome = ids.find(i => i.startsWith('biome:'));
+  const mob = ids.find(i => i.startsWith('mob:'));
+  let s = f ? f(h, { mob: N(mob) }) : '';
+  if (biome && !['story', 'start'].includes(h.t)) s += t().inb(N(biome));
+  if (h.loc) s += t().at(S(h.loc));
+  (h.keys || []).forEach(k => s += t().lockedBy(N(k)));
+  (h.after || []).forEach(b => s += t().after(N(b)));
+  const others = [...new Set(w.h.slice(1).map(x => S(x.src || x.loc)).filter(Boolean))].filter(x => !s.includes(x));
+  return [s, others];
+}
+let showAll = false, showAllU = false;
+function show(k) {
+  const d = $('detail'); if (!k || !laid) { d.innerHTML = ''; return; }
+  const n = N0[k], p = laid.pos[k] || { st: ST[k] }, info = DATA.detail[n.id] || { w: [] };
+  d.className = 'detail ' + p.st;
+  const kind = t().kinds[n.k] || n.k;
+  d.innerHTML = `<div class="big">${iconHTML(n.ic, n.k, nm(n.id))}</div><div style="min-width:0">
+    <h3></h3><div class="meta"><span class="pill ${p.st}">${n.im ? t().implied : t()[p.st]}</span><span class="pill">${kind}</span></div>
+    <p class="desc" hidden></p><div class="ways"></div><div class="ways unl"></div><div class="note"></div></div>`;
+  const ub = d.querySelector('.unl'), U = info.u || [];
+  const uh = document.createElement('h4'); uh.textContent = U.length ? t().unlocks(U.length) : t().unlocksNone; ub.appendChild(uh);
+  if (U.length) {
+    const wrap = document.createElement('div'); wrap.className = 'reqs'; ub.appendChild(wrap);
+    const ULIM = 24;
+    U.slice(0, showAllU ? U.length : ULIM).forEach(id => wrap.appendChild(chip({ id })));
+    if (U.length > ULIM && !showAllU) {
+      const m = document.createElement('button'); m.type = 'button'; m.className = 'more';
+      m.textContent = t().showmore(U.length); m.onclick = () => { showAllU = true; show(k); }; ub.appendChild(m);
+    }
+  }
+  d.querySelector('h3').textContent = nm(n.id);
+  if (info.desc) { const e = d.querySelector('.desc'); e.hidden = false; e.textContent = lang === 'fr' ? info.desc[1] : info.desc[0]; }
+  const box = d.querySelector('.ways');
+  const head = document.createElement('h4'); head.textContent = t().ways(info.w.length + (info.more || 0)); box.appendChild(head);
+  const LIMIT = 4;
+  info.w.forEach((w, i) => {
+    if (!showAll && i >= LIMIT) return;
+    const card = document.createElement('div'); card.className = 'way' + (w.best ? ' best' : '');
+    const [txt, others] = sentence(w);
+    card.innerHTML = '<p><span></span></p><div class="reqs"></div>';
+    card.querySelector('span').textContent = txt;
+    if (w.best && info.w.length > 1) { const tg = document.createElement('span'); tg.className = 'tag'; tg.textContent = t().used; card.querySelector('p').appendChild(tg); }
+    if (others.length) { const a = document.createElement('span'); a.className = 'also'; a.textContent = ` · ${t().also}: ${others.slice(0, 5).join(', ')}`; card.querySelector('p').appendChild(a); }
+    const reqs = card.querySelector('.reqs');
+    if (!w.r.length) { reqs.textContent = t().nothingNeeded; reqs.className = 'note'; }
+    w.r.forEach(r => reqs.appendChild(chip(r)));
+    box.appendChild(card);
+  });
+  if (info.w.length > LIMIT && !showAll) {
+    const m = document.createElement('button'); m.type = 'button'; m.className = 'more';
+    m.textContent = t().showall(info.w.length);
+    m.onclick = () => { showAll = true; show(k); };
+    box.appendChild(m);
+  }
+  const notes = [];
+  if (info.more) notes.push(t().hidden(info.more));
+  if (n.lo) notes.push(t().loose);
+  if (n.im) notes.push(t().impliedNote);
+  d.querySelector('.note').textContent = notes.join(' ');
+}
+function select(k) {
+  if (selected && laid && laid.N[selected] && laid.N[selected].el) laid.N[selected].el.classList.remove('sel');
+  if (k !== selected) showAll = showAllU = false;
+  selected = k; if (laid.N[k] && laid.N[k].el) laid.N[k].el.classList.add('sel'); show(k);
+}
+function jump(id) {
+  if (!N0[id]) return;
+  if (!laid.pos[id]) { F = { era: new Set(ERAS), cat: new Set(CATS), status: 'all' }; saveF(); selected = id; filters(); render(); }
+  select(id); focusNode(id);
+}
+
+function apply() { world.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`; }
+function fit() {
+  const r = stage.getBoundingClientRect();
+  const k = Math.max(0.35, Math.min(1, r.height / laid.h, r.width / laid.w));
+  view = { k, x: 0, y: Math.max(0, (r.height - laid.h * k) / 2) };
+  if (laid.w * k < r.width) view.x = (r.width - laid.w * k) / 2;
+  apply();
+}
+function home() {  // readable zoom, anchored on the top-left where the biome starts
+  const r = stage.getBoundingClientRect();
+  view = { k: r.width < 600 ? 0.7 : 0.9, x: 10, y: 10 }; apply();
+}
+function zoomAt(f, cx, cy) {
+  const k = Math.min(2, Math.max(0.2, view.k * f)); f = k / view.k;
+  view.x = cx - (cx - view.x) * f; view.y = cy - (cy - view.y) * f; view.k = k; apply();
+}
+function focusNode(k) {
+  const p = laid.pos[k]; if (!p) return;
+  const r = stage.getBoundingClientRect();
+  if (view.k < 0.7) view.k = 0.85;
+  view.x = r.width / 2 - p.x * view.k; view.y = r.height / 2 - p.y * view.k; apply();
+}
+
+let dragging = false, moved = false, start = null; const pts = new Map();
+stage.addEventListener('pointerdown', e => {
+  if (e.target.closest('.tools')) return;
+  pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dragging = true; moved = false; start = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+});
+stage.addEventListener('pointermove', e => {
+  if (!pts.has(e.pointerId)) return;
+  const prev = pts.get(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pts.size === 2) {
+    const [a, b] = [...pts.values()];
+    const other = [...pts.entries()].find(([id]) => id !== e.pointerId)[1];
+    const d0 = Math.hypot(prev.x - other.x, prev.y - other.y), d1 = Math.hypot(a.x - b.x, a.y - b.y);
+    const r = stage.getBoundingClientRect();
+    if (d0 > 0) zoomAt(d1 / d0, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top);
+    moved = true; return;
+  }
+  const dx = e.clientX - start.x, dy = e.clientY - start.y;
+  if (!moved && Math.hypot(dx, dy) < 5) return;
+  if (!moved) { moved = true; stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId); }
+  view.x = start.vx + dx; view.y = start.vy + dy; apply();
+});
+const end = e => { pts.delete(e.pointerId); if (!pts.size) { dragging = false; stage.classList.remove('dragging'); setTimeout(() => moved = false, 0); } };
+stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
+stage.addEventListener('wheel', e => { e.preventDefault(); const r = stage.getBoundingClientRect();
+  zoomAt(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+$('zin').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(1.25, r.width / 2, r.height / 2); };
+$('zout').onclick = () => { const r = stage.getBoundingClientRect(); zoomAt(0.8, r.width / 2, r.height / 2); };
+$('zfit').onclick = fit;
+
+// search
+const index = [];
+Object.values(N0).forEach(n => index.push({ id: n.id, n }));
+$('q').addEventListener('input', () => {
+  const q = $('q').value.trim().toLowerCase(), box = $('results');
+  box.innerHTML = '';
+  if (q.length < 2) { box.hidden = true; return; }
+  const hits = index.filter(h => nm(h.id).toLowerCase().includes(q)).slice(0, 30);
+  hits.forEach(h => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.innerHTML = `${h.n.ic && DATA.icons[h.n.ic] ? `<img alt="" src="${DATA.icons[h.n.ic]}">` : ''}<span></span><small></small>`;
+    b.children[b.children.length - 2].textContent = nm(h.id);
+    b.lastChild.textContent = eraName(h.n.era);
+    b.onclick = () => { box.hidden = true; $('q').value = ''; jump(h.id); };
+    box.appendChild(b);
+  });
+  box.hidden = !hits.length;
+});
+document.addEventListener('click', e => { if (!e.target.closest('.ctl')) $('results').hidden = true; });
+
+const eraName = e => lang === 'fr' ? DATA.eras[e].fr : DATA.eras[e].en;
+function toggle(set, all, v) {
+  if (set.size === all.length) { set.clear(); set.add(v); }        // everything on: isolate this one
+  else if (set.has(v)) { set.delete(v); if (!set.size) all.forEach(x => set.add(x)); }
+  else set.add(v);
+}
+function filters() {
+  const box = $('filters'); box.innerHTML = '';
+  const row = (label, items, isOn, onClick, onAll, allOn) => {
+    const r = document.createElement('div'); r.className = 'frow';
+    const b = document.createElement('b'); b.textContent = label; r.appendChild(b);
+    if (onAll) {
+      const a = document.createElement('button'); a.type = 'button'; a.className = 'fchip all';
+      a.textContent = t().f.all; a.setAttribute('aria-pressed', allOn); a.onclick = onAll; r.appendChild(a);
+    }
+    items.forEach(([v, text, count]) => {
+      const c = document.createElement('button'); c.type = 'button'; c.className = 'fchip'; c.title = t().solo;
+      c.innerHTML = '<span></span>' + (count ? `<small>${count}</small>` : '');
+      c.firstChild.textContent = text; c.setAttribute('aria-pressed', isOn(v));
+      c.onclick = () => { onClick(v); saveF(); filters(); render(); };
+      r.appendChild(c);
+    });
+    box.appendChild(r);
+  };
+  const all = Object.values(N0), cnt = list => `${list.filter(n => n.d).length}/${list.length}`;
+  row(t().f.biome, ERAS.map(e => [e, eraName(e), cnt(all.filter(n => n.era === e))]), v => F.era.has(v) && F.era.size < ERAS.length,
+      v => toggle(F.era, ERAS, v), () => { F.era = new Set(ERAS); saveF(); filters(); render(); }, F.era.size === ERAS.length);
+  row(t().f.cat, CATS.map(c => [c, t().cats[c], cnt(all.filter(n => n.c === c))]), v => F.cat.has(v) && F.cat.size < CATS.length,
+      v => toggle(F.cat, CATS, v), () => { F.cat = new Set(CATS); saveF(); filters(); render(); }, F.cat.size === CATS.length);
+  row(t().f.status, STATUS.map(s => [s, s === 'all' ? t().f.any : t()[s], s === 'all' ? '' : all.filter(n => ST[n.id] === s).length]),
+      v => F.status === v, v => { F.status = v; });
+}
+function texts() {
+  $('t-of').textContent = t().of; $('t-saved').textContent = t().saved;
+  $('t-sel').textContent = t().sel; $('t-next').textContent = t().next;
+  $('q').placeholder = t().search; $('hint').textContent = t().hint; $('foot').textContent = t().foot;
+  $('lang').textContent = lang === 'fr' ? 'EN' : 'FR';
+  const cls = ['', 'c', 'm', 'b', 's', 'l', 'g'];
+  $('legend').innerHTML = t().legend.map((s, i) => `<span class="${cls[i]}"><i></i>${s}</span>`).join('');
+  const all = Object.values(N0), D = all.filter(n => n.d).length, TT = all.length;
+  $('overall').innerHTML = `${D}<small>${t().of2} ${TT} ${t().adv} · ${Math.round(100 * D / TT)}%</small>`;
+  $('overallbar').style.width = (100 * D / TT) + '%';
+  filters();
+}
+$('lang').onclick = () => { lang = lang === 'fr' ? 'en' : 'fr'; try { localStorage.setItem('okosaga-lang', lang); } catch (e) {} texts(); render(); };
+$('who').textContent = DATA.character; $('saved').textContent = DATA.saved;
+texts(); render();
+addEventListener('resize', () => laid && fit());
+</script>

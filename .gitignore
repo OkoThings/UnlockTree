@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+
+# Extracted from the game (copyrighted assets, large; regenerate with extract*.py / icons.py)
+gamedata.json
+gamedata_loc.json
+locations.json
+icons/
+
+# Build outputs
+okosaga.html
+mod/bin/
+mod/obj/
+mod/dist/
+mod/unlocktree.json

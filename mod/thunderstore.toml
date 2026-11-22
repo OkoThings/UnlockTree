@@ -1,0 +1,21 @@
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "OkoThings"
+name = "UnlockTree"
+versionNumber = "0.2.0"
+description = "Minecraft-style advancement tree for Valheim, built from the game's real requirements: recipes, stations, tool tiers, drops, bosses and biomes. Undiscovered steps stay hidden as \"?\"."
+websiteUrl = ""
+containsNsfwContent = false
+
+[package.dependencies]
+denikson-BepInExPack_Valheim = "5.4.2360"
+ValheimModding-Jotunn = "2.30.2"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["valheim"]
+
+[publish.categories]
+valheim = ["mods", "client-side", "utility", "ai-generated"]

@@ -1,0 +1,42 @@
+{
+  "_v2": [
+    2.0,
+    0.0
+  ],
+  "craft|piece_workbench@2": [
+    4.0,
+    -4.0
+  ],
+  "craft|AxeEarly": [
+    0.0,
+    0.5
+  ],
+  "craft|block:piece_workbench": [
+    0.0,
+    0.5
+  ],
+  "craft|PickaxeAntler": [
+    0.0,
+    -1.5
+  ],
+  "craft|biome:BlackForest": [
+    0.0,
+    -1.5
+  ],
+  "craft|Copper": [
+    4.0,
+    -4.0
+  ],
+  "craft|Coal": [
+    0.0,
+    0.5
+  ],
+  "craft|block:biome:BlackForest": [
+    0.0,
+    0.5
+  ],
+  "craft|biome:Swamp": [
+    0.0,
+    -6.0
+  ]
+}
