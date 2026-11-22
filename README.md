@@ -67,3 +67,8 @@ The profile defaults to r2modman's `Narnia` profile; set `PROFILE=/path/to/profi
 `BepInEx/config/okothings.unlocktree.cfg`: `ToggleKey` (F7), `InventoryButtonOffset`, and `Dev.DevMode`,
 which adds an **Arrange** tool to lay out the pages by hand (saved to `unlocktree.layout.json`, shipped
 inside the mod by `deploy.sh` / `pack.sh`).
+
+## License
+
+[MIT](LICENSE) for the code in this repository. Valheim, its data and its assets belong to Iron Gate AB;
+none of them are included here.

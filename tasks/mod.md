@@ -65,3 +65,6 @@ Legend: [x] done · [~] written, builds, not yet tested in game · [ ] open
 - [x] Published 0.2.0 (version bump, CHANGELOG, README) — before the in-game test, at the user's request
 - [x] In-game test (user, 2026-11-23)
 - [x] Website link to https://github.com/OkoThings/UnlockTree + repo README (0.2.1)
+
+## Docs
+- [ ] Screenshot in English (game language English) to replace docs/screenshot.png, the current one is in French (user)
