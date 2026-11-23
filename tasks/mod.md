@@ -67,4 +67,4 @@ Legend: [x] done · [~] written, builds, not yet tested in game · [ ] open
 - [x] Website link to https://github.com/OkoThings/UnlockTree + repo README (0.2.1)
 
 ## Docs
-- [ ] Screenshot in English (game language English) to replace docs/screenshot.png, the current one is in French (user)
+- [x] Screenshot in English with the search box (user, 2026-11-23)
