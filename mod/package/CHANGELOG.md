@@ -1,3 +1,8 @@
+## 0.2.2
+
+- Fix: the wire to a group of steps no longer cuts through its parent's name.
+- English screenshot in the README.
+
 ## 0.2.1
 
 - Screenshot in the README; link to the source code on GitHub.

@@ -349,7 +349,10 @@ namespace UnlockTree
                 Img(box, done ? new Color(.85f, .65f, .3f, .55f) : new Color(.6f, .6f, .6f, .35f)).raycastTarget = false;          // rim
                 Img(Place(Rect("fill", box), Vector2.zero, Vector2.one, new Vector2(2, 2), new Vector2(-2, -2)), new Color(.05f, .04f, .03f, .6f)).raycastTarget = false;
                 var st = bl.Ids.All(_prog.IsDone) ? State.Done : _prog.IsDone(bl.From) ? State.Available : State.Locked;
-                Edge(edges, At(fp), At((bl.C, bl.R)) - new Vector2(Layout.CW / 2 - 4, 0), st);
+                // the wire ends on the box's left border, half a cell before a normal child, so bend it just before the
+                // border (in the gap after the parent's label) rather than halfway, which would cut through the label
+                var boxLeft = At((bl.C, bl.R)) - new Vector2(Layout.CW / 2 - 4, 0);
+                Edge(edges, At(fp), boxLeft, st, boxLeft.x - 4);
             }
             foreach (var kv in _view.Parent)
                 if (!boxed.Contains(kv.Key) && _pos.TryGetValue(kv.Key, out var c) && _pos.TryGetValue(kv.Value, out var p)) Edge(edges, At(p), At(c), _prog.Of(kv.Key));
@@ -364,10 +367,10 @@ namespace UnlockTree
             }
         }
 
-        static void Edge(RectTransform parent, Vector2 a, Vector2 b, State st)
+        static void Edge(RectTransform parent, Vector2 a, Vector2 b, State st, float? bendX = null)
         {
             var col = st == State.Done ? new Color(Style.Gold.r, Style.Gold.g, Style.Gold.b, .7f) : st == State.Available ? new Color(Style.Steel.r, Style.Steel.g, Style.Steel.b, .6f) : new Color(.35f, .35f, .35f, .7f);
-            float mx = (a.x + b.x) / 2;
+            float mx = bendX ?? (a.x + b.x) / 2;
             void Seg(Vector2 p, Vector2 q)
             {
                 var r = Rect("e", parent); r.anchorMin = r.anchorMax = new Vector2(0, 1); r.pivot = new Vector2(0, 1);

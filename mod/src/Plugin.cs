@@ -10,7 +10,7 @@ namespace UnlockTree
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "okothings.unlocktree";
-        public const string Version = "0.2.1";
+        public const string Version = "0.2.2";
         internal static Plugin Instance;
         internal static BepInEx.Logging.ManualLogSource Log;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey;
